@@ -1,0 +1,22 @@
+# ===== Python 虚拟环境 =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== Python 缓存 =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# ===== 编辑器 / IDE =====
+.vscode/
+.vscode/*
+!.vscode/settings.json
+.idea/
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
