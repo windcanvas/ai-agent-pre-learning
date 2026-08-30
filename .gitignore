@@ -17,6 +17,10 @@ build/
 !.vscode/settings.json
 .idea/
 
+# ===== 密钥 / 环境变量 =====
+.env
+.env.local
+
 # ===== 系统文件 =====
 .DS_Store
 Thumbs.db
