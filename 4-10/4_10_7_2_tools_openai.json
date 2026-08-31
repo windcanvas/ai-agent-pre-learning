@@ -1,11 +1,10 @@
-{
-  "tools": [
-    {
+[
+  {
+    "type": "function",
+    "function": {
       "name": "git_fetch_pr_diff",
       "description": "从代码托管平台（GitHub/GitLab/Gitea）获取指定 Pull Request / Merge Request 的完整文件变更差异（Diff）。返回每个变更文件的路径、增删行统计、以及统一格式的 diff hunk 内容。审查 Agent 的第一个动作必须调用此工具拿到原始变更集。",
-      "security_level": "CAUTION",
-      "security_reason": "需要仓库 READ 权限；大 PR 的 Diff 可能消耗大量 API 额度（单 PR 上限 ~5000 文件）。不会修改任何数据，但需注意 API Rate Limit。",
-      "params": {
+      "parameters": {
         "type": "object",
         "$schema": "http://json-schema.org/draft-07/schema#",
         "required": [
@@ -79,41 +78,15 @@
             "description": "每个 diff hunk 前后保留的上下文行数，帮助理解代码结构"
           }
         }
-      },
-      "returns_example": {
-        "meta": {
-          "change_id": 12345,
-          "title": "优化 CUDA kernel 启动逻辑",
-          "author": "gh-user-01",
-          "total_files": 42,
-          "returned_files": 42,
-          "truncated": false
-        },
-        "files": [
-          {
-            "path": "torch/cuda/device.py",
-            "status": "modified",
-            "additions": 56,
-            "deletions": 21,
-            "diff_hunks": [
-              {
-                "old_start": 100,
-                "old_lines": 15,
-                "new_start": 100,
-                "new_lines": 28,
-                "unified_diff": "@@ -100,15 +100,28 @@ ..."
-              }
-            ]
-          }
-        ]
       }
-    },
-    {
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "static_analyze_snippet",
       "description": "对传入的代码片段执行多维度静态分析：语法合法性检查、代码风格匹配、潜在 Bug 模式识别、安全漏洞规则匹配（OWASP Top 10 / CWE 常见模式）。纯本地规则引擎，无网络调用。返回每个发现的问题及其具体行号、严重级别、修复建议片段。",
-      "security_level": "SAFE",
-      "security_reason": "纯本地计算的规则匹配，无文件写入、无网络调用、不执行任何传入代码。潜在风险：大段代码消耗 CPU（通过 maxLength 参数限制）；custom_rules 中的正则可能引起灾难性回溯(ReDoS)，运行时需设置匹配超时(如 2s)并限制 pattern 长度。",
-      "params": {
+      "parameters": {
         "type": "object",
         "$schema": "http://json-schema.org/draft-07/schema#",
         "required": [
@@ -223,34 +196,15 @@
             "description": "项目私有规则（如禁止 torch.cuda.synchronize 热路径调用）"
           }
         }
-      },
-      "returns_example": {
-        "summary": {
-          "total": 5,
-          "critical": 1,
-          "error": 2,
-          "warning": 2
-        },
-        "findings": [
-          {
-            "rule_id": "SEC-HARDCODED-KEY",
-            "line": 42,
-            "column": 15,
-            "severity": "critical",
-            "rule_set": "security",
-            "message": "疑似硬编码 AWS Access Key，应移至环境变量",
-            "snippet": "AWS_KEY = \"AKIAIOSFODNN7EXAMPLE\"",
-            "fix_suggestion": "AWS_KEY = os.environ[\"AWS_ACCESS_KEY_ID\"]"
-          }
-        ]
       }
-    },
-    {
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "measure_code_quality",
       "description": "对变更文件集合计算代码质量的量化维度：圈复杂度(Cyclomatic Complexity)、认知复杂度(Cognitive Complexity)、函数长度分布、重复代码率、入站/出站依赖变化、测试覆盖率缺口（如果仓库有 baseline 文件）。返回结构化度量结果和与仓库基线对比的「异常红灯」列表。",
-      "security_level": "CAUTION",
-      "security_reason": "只读操作，但在复杂项目中可能触发 radon / clippy / eslint 等本地命令执行；需在沙箱环境运行，禁止允许通过此工具执行任意用户可控命令。另外会读取项目中的 .quality_baseline.json 基线文件（如果存在）。",
-      "params": {
+      "parameters": {
         "type": "object",
         "$schema": "http://json-schema.org/draft-07/schema#",
         "required": [
@@ -354,36 +308,15 @@
             }
           }
         }
-      },
-      "returns_example": {
-        "files_analyzed": 12,
-        "baseline_compared": true,
-        "per_file": [
-          {
-            "path": "torch/cuda/device.py",
-            "avg_cyclomatic": 7.2,
-            "max_cyclomatic": 21,
-            "max_cyclomatic_function": "_launch_kernel_grid",
-            "duplication_pct": 3.1,
-            "hotspots": [
-              "function _launch_kernel_grid complexity=21 exceeds limit 12"
-            ]
-          }
-        ],
-        "summary_red_lights": [
-          {
-            "severity": "warning",
-            "message": "1 个函数圈复杂度(21)超过基线(12)，建议拆分"
-          }
-        ]
       }
-    },
-    {
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "submit_review_comments",
       "description": "将审查结果批量写回代码托管平台：逐行评论（Inline Comment）、PR 整体总结评论（PR Body Comment）、以及审查结论（Approve / Request Changes / Comment）。写入前会先执行幂等性检查：同一 Agent ID + 同一 PR 编号默认只保留最近一次评论集。此工具具有写入副作用，调用前必须通过人类确认前置或审批 Gate。",
-      "security_level": "UNSAFE",
-      "security_reason": "会真实写入评论到平台，影响团队协作流。错误的评论或过高噪音会骚扰同事、污染 PR 讨论上下文。特别是 Approve 操作会直接影响合并权限，必须严格审批。建议生产环境配置：REQUIRE_HUMAN_APPROVAL_BEFORE_SUBMIT=true。",
-      "params": {
+      "parameters": {
         "type": "object",
         "$schema": "http://json-schema.org/draft-07/schema#",
         "required": [
@@ -530,17 +463,7 @@
             "description": "人工审批通过的一次性 Token。dev/test 环境可省略；生产环境必填，缺失或无效 Token 时工具直接返回 403 拒绝写入。是否强制由服务端配置 REQUIRE_HUMAN_APPROVAL_BEFORE_SUBMIT 决定。"
           }
         }
-      },
-      "returns_example": {
-        "status": "submitted",
-        "review_action": "REQUEST_CHANGES",
-        "submitted_comments": 23,
-        "deleted_previous_comments": 19,
-        "links": {
-          "pr_url": "https://github.com/pytorch/pytorch/pull/12345",
-          "review_id": 2184930712
-        }
       }
     }
-  ]
-}
+  }
+]

@@ -63,7 +63,7 @@ CODE_REVIEW_TOOLS = [
                 "change_id": {
                     "oneOf": [
                         {"type": "integer", "minimum": 1},
-                        {"type": "string", "pattern": r"^[a-f0-9]{7,40}$"},
+                        {"type": "string", "pattern": r"^[a-fA-F0-9]{7,40}$"},
                     ],
                     "description": "PR/MR 编号（int）或 Commit SHA（7~40 位十六进制）",
                 },
@@ -149,7 +149,7 @@ CODE_REVIEW_TOOLS = [
                 "code_snippet": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 200000,  # 约 200KB 上限
+                    "maxLength": 200000,  # 约 20 万字符上限
                     "description": "待分析的源代码全文或片段（建议单次 <= 5000 行）",
                 },
                 "language": {
@@ -192,6 +192,7 @@ CODE_REVIEW_TOOLS = [
                     "items": {
                         "type": "object",
                         "required": ["id", "pattern", "severity", "message"],
+                        "additionalProperties": False,
                         "properties": {
                             "id": {"type": "string"},
                             "pattern": {
@@ -241,7 +242,7 @@ CODE_REVIEW_TOOLS = [
         "security_reason": (
             "只读操作，但在复杂项目中可能触发 radon / clippy / eslint 等本地命令执行；"
             "需在沙箱环境运行，禁止允许通过此工具执行任意用户可控命令。"
-            "另外会读取项目中的 coverage_baseline.json（如果存在）。"
+            "另外会读取项目中的 .quality_baseline.json 基线文件（如果存在）。"
         ),
         "params": {
             "type": "object",
@@ -256,6 +257,7 @@ CODE_REVIEW_TOOLS = [
                     "items": {
                         "type": "object",
                         "required": ["path", "language", "code_content"],
+                        "additionalProperties": False,
                         "properties": {
                             "path": {"type": "string", "description": "文件相对路径"},
                             "language": {
@@ -295,12 +297,13 @@ CODE_REVIEW_TOOLS = [
                 },
                 "repo_baseline_path": {
                     "type": "string",
-                    "description": "仓库历史基线 JSON 文件的本地路径（包含 avg_complexity 等），如 .quality_baseline.json",
+                    "description": "仓库历史基线 JSON 文件的本地路径（包含 avg_complexity 等），如 .quality_baseline.json。安全约束：仅允许仓库内相对路径，实现层需做白名单/目录越界校验，禁止读取任意本地文件",
                 },
                 "threshold_overrides": {
                     "type": "object",
                     "description": "覆盖默认阈值，如 {\"max_function_complexity\": 15, \"max_duplication_pct\": 5}",
                     "default": {},
+                    "additionalProperties": False,
                     "properties": {
                         "max_function_complexity": {"type": "integer", "minimum": 1},
                         "max_function_lines": {"type": "integer", "minimum": 1},
@@ -347,7 +350,7 @@ CODE_REVIEW_TOOLS = [
         "security_level": SecurityLevel.UNSAFE,
         "security_reason": (
             "会真实写入评论到平台，影响团队协作流。错误的评论或过高噪音会骚扰同事、"
-            "污染 PR 讨论上下文。特别是 Appove 操作会直接影响合并权限，必须严格审批。"
+            "污染 PR 讨论上下文。特别是 Approve 操作会直接影响合并权限，必须严格审批。"
             "建议生产环境配置：REQUIRE_HUMAN_APPROVAL_BEFORE_SUBMIT=true。"
         ),
         "params": {
@@ -363,12 +366,18 @@ CODE_REVIEW_TOOLS = [
                     "type": "string",
                     "enum": ["github", "gitlab", "gitea", "bitbucket"],
                 },
-                "repo_owner": {"type": "string"},
-                "repo_name": {"type": "string"},
+                "repo_owner": {
+                    "type": "string",
+                    "pattern": r"^[a-zA-Z0-9_.-]+$",
+                },
+                "repo_name": {
+                    "type": "string",
+                    "pattern": r"^[a-zA-Z0-9_.-]+$",
+                },
                 "change_id": {
                     "oneOf": [
                         {"type": "integer", "minimum": 1},
-                        {"type": "string", "pattern": r"^[a-f0-9]{7,40}$"},
+                        {"type": "string", "pattern": r"^[a-fA-F0-9]{7,40}$"},
                     ],
                 },
                 "reviewer_agent_id": {
@@ -391,6 +400,7 @@ CODE_REVIEW_TOOLS = [
                     "items": {
                         "type": "object",
                         "required": ["body"],
+                        "additionalProperties": False,
                         "properties": {
                             "path": {
                                 "type": "string",
@@ -441,6 +451,7 @@ CODE_REVIEW_TOOLS = [
                 "idempotency": {
                     "type": "object",
                     "default": {"overwrite_previous_by_agent": True, "dedup_window_hours": 24},
+                    "additionalProperties": False,
                     "properties": {
                         "overwrite_previous_by_agent": {
                             "type": "boolean",
@@ -480,6 +491,29 @@ CODE_REVIEW_TOOLS = [
 
 
 # ==============================================================================
+# 格式转换：导出为 OpenAI Function Calling 兼容结构
+# ==============================================================================
+def to_openai_function_specs():
+    """把工具清单转换为 OpenAI Function Calling 格式。
+
+    标准格式只接受 name / description / parameters 三个字段，
+    本文件额外携带的 security_level / security_reason / returns_example
+    会在转换时丢弃（OpenAI SDK 不接受未知字段）。
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool["description"],
+                "parameters": tool["params"],
+            },
+        }
+        for tool in CODE_REVIEW_TOOLS
+    ]
+
+
+# ==============================================================================
 # 打印工具清单（人类可读版 + JSON Schema 导出）
 # ==============================================================================
 if __name__ == "__main__":
@@ -496,9 +530,10 @@ if __name__ == "__main__":
     print(" 自动代码审查 Agent — 工具清单（共 4 个）")
     print(SEP)
 
+    total = len(CODE_REVIEW_TOOLS)
     for idx, tool in enumerate(CODE_REVIEW_TOOLS, 1):
         print()
-        print(f"【Tool {idx}/4】 {tool['name']}")
+        print(f"【Tool {idx}/{total}】 {tool['name']}")
         print(f"  安全级别 : {tool['security_level'].value}")
         print(f"  安全说明 : {tool['security_reason']}")
         desc = tool['description']
@@ -528,3 +563,11 @@ if __name__ == "__main__":
     print(f"✅ 完整 JSON Schema 已写入: {OUTPUT_PATH}")
     print(f"   包含字段: name / description / security_level / security_reason")
     print(f"           / params (标准 JSON Schema draft-07) / returns_example")
+
+    openai_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "4_10_7_2_tools_openai.json",
+    )
+    with open(openai_path, "w", encoding="utf-8") as f:
+        json.dump(to_openai_function_specs(), f, ensure_ascii=False, indent=2)
+    print(f"✅ OpenAI Function Calling 格式已写入: {openai_path}")
